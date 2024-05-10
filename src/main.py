@@ -42,10 +42,9 @@ def train(args):
     ema = EMA(0.995)
     ema_model = copy.deepcopy(model).eval().requires_grad_(False)
 
-    num_samples = 32000
-    total_batches = get_total_batches(args.data_path, phase='train', num_samples=num_samples, batch_size=args.batch_size)
+    total_batches = get_total_batches(args.data_path, phase='train', num_samples=int(args.num_samples), batch_size=args.batch_size)
     for epoch in range(args.epochs):
-      gen = data_generator(args.data_path, phase="train", num_samples = num_samples, batch_size=args.batch_size)
+      gen = data_generator(args.data_path, phase="train", num_samples = int(args.num_samples), batch_size=args.batch_size)
 
       total_loss = 0
       curr_time = time.time()

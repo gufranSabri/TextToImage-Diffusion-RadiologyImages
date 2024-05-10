@@ -135,8 +135,8 @@ class TextEncoder(nn.Module):
         self.radbert = AutoModel.from_pretrained('zzxslp/RadBERT-RoBERTa-4m')
         self.projector = nn.Linear(768, projection_dim)
 
-        # for param in self.radbert.parameters():
-        #     param.requires_grad = False
+        for param in self.radbert.parameters():
+            param.requires_grad = False
     
     def forward(self, x):
         emb = []
