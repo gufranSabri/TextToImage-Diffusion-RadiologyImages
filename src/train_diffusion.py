@@ -1,24 +1,28 @@
 import os
 import copy
 import torch
-import torch.nn as nn
 from tqdm import tqdm
+import torch.nn as nn
 from torch import optim
-from utils import *
-from model import *
 from transformers import AutoTokenizer
+
+from utils import *
+from diffusion.unet import UNet_Simple, UNet
+from diffusion.diffusion import Diffusion
+from diffusion.ema import EMA
+from clip.mtl_clip import MTL_CLIP
+
+import datetime
 import argparse
 import time
-
 import warnings
 warnings.filterwarnings("ignore")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def train(args):
-    if not os.path.exists("./results"):
-      os.mkdir("./results")
+    if not os.path.exists("./results"):os.mkdir("./results")
     
-    res_path = os.path.join("./results", args.model + str(len(os.listdir("./results"))+1))
+    res_path = os.path.join("./results", args.model + f"_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')}")
     images_path = os.path.join(res_path, "images")
     text_path = os.path.join(res_path, "text")
     model_path = os.path.join(res_path, "model")
@@ -29,12 +33,11 @@ def train(args):
     os.mkdir(model_path)
 
     model = None
-    if args.model == "UNet_Simple":
-      model = UNet_Simple().to(args.device)
-    elif args.model == "UNet":
-      model = UNet().to(args.device)
+    clip = MTL_CLIP()
+    if args.model == "UNet_Simple": model = UNet_Simple(clip, device=args.device).to(args.device)
+    elif args.model == "UNet": model = UNet(clip, device=args.device).to(args.device)
 
-    diffusion = Diffusion(img_size=args.image_size, device=args.device)
+    diffusion = Diffusion(img_size=args.image_size, device=args.device, scheduler_type="cosine")
     text_tokenizer = AutoTokenizer.from_pretrained('zzxslp/RadBERT-RoBERTa-4m')
 
     optimizer = optim.AdamW(model.parameters(), lr=3e-4)
@@ -42,9 +45,9 @@ def train(args):
     ema = EMA(0.995)
     ema_model = copy.deepcopy(model).eval().requires_grad_(False)
 
-    total_batches = get_total_batches(args.data_path, phase='train', num_samples=int(args.num_samples), batch_size=args.batch_size)
+    total_batches = get_total_batches(args.data_path, phase='train', batch_size=args.batch_size)
     for epoch in range(args.epochs):
-      gen = data_generator(args.data_path, phase="train", num_samples = int(args.num_samples), batch_size=args.batch_size)
+      gen = diffusion_data_generator(args.data_path, phase="train", batch_size=args.batch_size)
 
       total_loss = 0
       curr_time = time.time()
@@ -68,7 +71,7 @@ def train(args):
 
         total_loss += loss.item()
 
-      test_gen = data_generator(args.data_path, phase="test", batch_size=4)
+      test_gen = diffusion_data_generator(args.data_path, phase="test", batch_size=4)
       captions = None
       for images, captions in test_gen:
         for i, c in enumerate(captions):
@@ -93,7 +96,6 @@ if __name__ == "__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument('-data_path',dest='data_path', default='./data/rocov2')
     parser.add_argument('-model',dest='model', default="UNet_Simple")
-    parser.add_argument('-num_samples',dest='num_samples', default=1000)
     parser.add_argument('-epochs',dest='epochs', default=300)
     parser.add_argument('-batch_size',dest='batch_size', default=16)
     parser.add_argument('-image_size',dest='image_size', default=64)

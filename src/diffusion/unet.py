@@ -1,39 +1,6 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModel
-
-from tqdm import tqdm
-import numpy as np
-
-class EMA:
-    def __init__(self, beta):
-        super().__init__()
-        self.beta = beta
-        self.step = 0
-
-    def update_model_average(self, ma_model, current_model):
-        for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()):
-            old_weight, up_weight = ma_params.data, current_params.data
-            ma_params.data = self.update_average(old_weight, up_weight)
-
-    def update_average(self, old, new):
-        if old is None:
-            return new
-        return old * self.beta + (1 - self.beta) * new
-
-    def step_ema(self, ema_model, model, step_start_ema=2000):
-        if self.step < step_start_ema:
-            self.reset_parameters(ema_model, model)
-            self.step += 1
-            return
-        self.update_model_average(ema_model, model)
-        self.step += 1
-
-    def reset_parameters(self, ema_model, model):
-        ema_model.load_state_dict(model.state_dict())
-
 
 class SelfAttention(nn.Module):
     def __init__(self, channels, size):
@@ -57,7 +24,6 @@ class SelfAttention(nn.Module):
         attention_value = self.ff_self(attention_value) + attention_value
         return attention_value.swapaxes(2, 1).view(-1, self.channels, self.size, self.size)
 
-
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None, residual=False):
         super().__init__()
@@ -78,9 +44,8 @@ class DoubleConv(nn.Module):
         else:
             return self.double_conv(x)
 
-
 class Down(nn.Module):
-    def __init__(self, in_channels, out_channels, emb_dim=256):
+    def __init__(self, in_channels, out_channels, emb_dim=128):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
             nn.MaxPool2d(2),
@@ -103,7 +68,7 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    def __init__(self, in_channels, out_channels, emb_dim=256):
+    def __init__(self, in_channels, out_channels, emb_dim=128):
         super().__init__()
 
         self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
@@ -126,30 +91,9 @@ class Up(nn.Module):
         x = self.conv(x)
         emb = self.emb_layer(t)[:, :, None, None].repeat(1, 1, x.shape[-2], x.shape[-1])
         return x + emb
-
-class TextEncoder(nn.Module):
-    def __init__(self, projection_dim=256, device="mps"):
-        super().__init__()
-        self.device = device
-        self.tokenizer = AutoTokenizer.from_pretrained('zzxslp/RadBERT-RoBERTa-4m')
-        self.radbert = AutoModel.from_pretrained('zzxslp/RadBERT-RoBERTa-4m')
-        self.projector = nn.Linear(768, projection_dim)
-
-        for param in self.radbert.parameters():
-            param.requires_grad = False
-    
-    def forward(self, x):
-        emb = []
-        for i in range(len(x)):
-            emb.append(self.radbert(input_ids = x[i][0], attention_mask = x[i][1]).last_hidden_state[:, 0, :])
-        
-        emb = torch.stack(emb)
-        projected = self.projector(emb).squeeze(1)
-
-        return projected
     
 class UNet_Simple(nn.Module):
-    def __init__(self, c_in=1, c_out=1, time_dim = 256, device="mps"):
+    def __init__(self, clip, c_in=1, c_out=1, time_dim = 128, device="cuda"):
         super().__init__()
         self.device = device
         self.time_dim = time_dim
@@ -165,7 +109,10 @@ class UNet_Simple(nn.Module):
         self.up3 = Up(128, 64)
         self.outc = nn.Conv2d(64, c_out, kernel_size=1)
 
-        self.text_encoder = TextEncoder(device=device)
+        self.text_encoder = clip
+
+        for param in self.text_encoder.parameters():
+            param.requires_grad = False
 
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (
@@ -181,7 +128,8 @@ class UNet_Simple(nn.Module):
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
 
-        text_emb = self.text_encoder(text)
+        _, text_emb, _ = self.text_encoder(None, text, None)
+        text_emb = text_emb.squeeze(1)
         t += text_emb
 
         x1 = self.inc(x)
@@ -201,7 +149,7 @@ class UNet_Simple(nn.Module):
         return output
 
 class UNet(nn.Module):
-    def __init__(self, c_in=1, c_out=1, time_dim=256, device="mps"):
+    def __init__(self, clip, c_in=1, c_out=1, time_dim=128, device="cuda"):
         super().__init__()
         self.device = device
         self.time_dim = time_dim
@@ -225,7 +173,7 @@ class UNet(nn.Module):
         self.sa6 = SelfAttention(64, 64)
         self.outc = nn.Conv2d(64, c_out, kernel_size=1)
 
-        self.text_encoder = TextEncoder(device=device)
+        self.text_encoder = clip
 
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (
@@ -241,7 +189,8 @@ class UNet(nn.Module):
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
 
-        text_emb = self.text_encoder(text)
+        _, text_emb, _ = self.text_encoder(None, text, None)
+        text_emb = text_emb.squeeze(1)
         t += text_emb
 
         x1 = self.inc(x)
@@ -265,62 +214,3 @@ class UNet(nn.Module):
         output = self.outc(x)
 
         return output
-    
-class Diffusion:
-    def __init__(self, noise_steps=700, beta_start=1e-4, beta_end=0.02, img_size=64, scheduler_type='linear', device="mps"):
-        self.noise_steps = noise_steps
-        self.beta_start = beta_start
-        self.beta_end = beta_end
-
-        self.device = device
-
-        if scheduler_type == 'linear':
-            self.beta = self.prepare_linear_noise_schedule().to(device)
-        elif scheduler_type == 'cosine':
-            self.beta = self.prepare_cosine_noise_schedule().to(device)
-        
-        self.alpha = 1. - self.beta
-        self.alpha = self.alpha.to(device)
-        self.alpha_hat = torch.cumprod(self.alpha, dim=0).to(device)
-
-        self.img_size = img_size
-
-    def prepare_linear_noise_schedule(self):
-        return torch.linspace(self.beta_start, self.beta_end, self.noise_steps)
-    
-    def prepare_cosine_noise_schedule(self):
-        t = torch.linspace(0, 1, self.noise_steps, device=self.device)
-        cos_schedule = 0.5 * (1 + np.cos(np.pi * t))
-        beta = self.beta_start + 0.5 * (self.beta_end - self.beta_start) * cos_schedule
-        return beta
-
-    def noise_images(self, x, t):
-        sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None]
-
-        sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
-        Ɛ = torch.randn_like(x)
-        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * Ɛ, Ɛ
-
-    def sample_timesteps(self, n):
-        return torch.randint(low=1, high=self.noise_steps, size=(n,))
-
-    def sample(self, model, n, text):
-        model.eval()
-        with torch.no_grad():
-            x = torch.randn((n, 1, self.img_size, self.img_size)).to(self.device)
-            for i in tqdm(reversed(range(1, self.noise_steps)), position=0, desc="Sampling"):
-                t = (torch.ones(n) * i).long().to(self.device)
-                predicted_noise = model(x, t, text)
-                alpha = self.alpha[t][:, None, None, None]
-                alpha_hat = self.alpha_hat[t][:, None, None, None]
-                beta = self.beta[t][:, None, None, None]
-                if i > 1:
-                    noise = torch.randn_like(x)
-                else:
-                    noise = torch.zeros_like(x)
-                x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
-
-        model.train()
-        x = (x.clamp(-1, 1) + 1) / 2
-        x = (x * 255).type(torch.uint8)
-        return x

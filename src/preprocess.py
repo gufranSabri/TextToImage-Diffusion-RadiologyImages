@@ -16,6 +16,7 @@ def preprocess(data_path, phase='train'):
         for cui in cuis:
             if len(df_cui_captions[df_cui_captions['CUI'] == cui]['Canonical name'].values) == 0:
                 if len(cuis) == 1: rows_to_drop.append(i)
+                df.at[i, "CUIs"] = str(df.at[i, "CUIs"]).replace(cui, "").replace(";;", ";").strip(";")
                 continue
 
             captions.append(df_cui_captions[df_cui_captions['CUI'] == cui]['Canonical name'].values[0])
