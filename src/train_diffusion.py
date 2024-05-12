@@ -34,6 +34,9 @@ def train(args):
 
     model = None
     clip = MTL_CLIP()
+    clip.load_state_dict(torch.load("./models/mtl_clip.pth"))
+    clip.eval()
+
     if args.model == "UNet_Simple": model = UNet_Simple(clip, device=args.device).to(args.device)
     elif args.model == "UNet": model = UNet(clip, device=args.device).to(args.device)
 

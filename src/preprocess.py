@@ -3,6 +3,9 @@ import pandas as pd
 from tqdm import tqdm
 
 def preprocess(data_path, phase='train'):
+    if not os.path.exists(os.path.join(data_path, "processed")):
+        os.makedirs(os.path.join(data_path, "processed"))
+
     df_cui_captions = pd.read_csv(os.path.join(data_path, "unprocessed", f"cui_mapping.csv"))
     df_captions = pd.read_csv(os.path.join(data_path, "unprocessed", f"{phase}_captions.csv"))
     df_concepts = pd.read_csv(os.path.join(data_path, "unprocessed", f"{phase}_concepts.csv"))
@@ -26,7 +29,7 @@ def preprocess(data_path, phase='train'):
     df = df.drop(rows_to_drop)
     df['CUI_caption'] = cui_captions
 
-    df.to_csv(os.path.join(data_path, f"{phase}.csv"), index=False)
+    df.to_csv(os.path.join(data_path, "processed", f"{phase}.csv"), index=False)
 
 if __name__ == "__main__":
     DATA_PATH = "./data/rocov2"
