@@ -22,7 +22,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 def train(args):
     if not os.path.exists("./results"):os.mkdir("./results")
     
-    res_path = os.path.join("./results", args.model + f"_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')}")
+    res_path = os.path.join("./results", args.model + f"_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
     images_path = os.path.join(res_path, "images")
     text_path = os.path.join(res_path, "text")
     model_path = os.path.join(res_path, "model")
@@ -37,7 +37,7 @@ def train(args):
     if args.model == "UNet_Simple": model = UNet_Simple(clip, device=args.device).to(args.device)
     elif args.model == "UNet": model = UNet(clip, device=args.device).to(args.device)
 
-    diffusion = Diffusion(img_size=args.image_size, device=args.device, scheduler_type="cosine")
+    diffusion = Diffusion(img_size=args.image_size, device=args.device, scheduler_type="linear")
     text_tokenizer = AutoTokenizer.from_pretrained('zzxslp/RadBERT-RoBERTa-4m')
 
     optimizer = optim.AdamW(model.parameters(), lr=3e-4)
@@ -45,6 +45,7 @@ def train(args):
     ema = EMA(0.995)
     ema_model = copy.deepcopy(model).eval().requires_grad_(False)
 
+    model.train()
     total_batches = get_total_batches(args.data_path, phase='train', batch_size=args.batch_size)
     for epoch in range(args.epochs):
       gen = diffusion_data_generator(args.data_path, phase="train", batch_size=args.batch_size)
@@ -73,6 +74,7 @@ def train(args):
 
       test_gen = diffusion_data_generator(args.data_path, phase="test", batch_size=4)
       captions = None
+      model.eval()
       for images, captions in test_gen:
         for i, c in enumerate(captions):
           with open(os.path.join(text_path, f"{epoch}.txt"), 'a') as f:

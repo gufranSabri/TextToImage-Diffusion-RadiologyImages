@@ -12,6 +12,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 class MTL_CLIP(nn.Module):
     def __init__(self):
         super(MTL_CLIP, self).__init__()
+
         self.image_encoder = models.mobilenet_v2(pretrained=True)
         self.image_encoder.classifier = nn.Identity()
         self.image_projection = nn.Linear(1280, 128)
@@ -19,18 +20,26 @@ class MTL_CLIP(nn.Module):
         self.text_encoder = AutoModel.from_pretrained('zzxslp/RadBERT-RoBERTa-4m')
         self.text_projection = nn.Linear(self.text_encoder.config.hidden_size, 128)
 
-    def forward(self, images, captions, cuis):
+    def forward(self, images, captions, cuis, return_sequence = False):
         caption_emb = []
         if captions is not None:
             for i in range(len(captions)):
-                caption_emb.append(self.text_encoder(input_ids = captions[i][0], attention_mask = captions[i][1]).last_hidden_state[:, 0, :])
+                if return_sequence:
+                    caption_emb.append(self.text_encoder(input_ids = captions[i][0], attention_mask = captions[i][1]).last_hidden_state)
+                else:
+                    caption_emb.append(self.text_encoder(input_ids = captions[i][0], attention_mask = captions[i][1]).last_hidden_state[:, 0, :])
+
             caption_emb = torch.stack(caption_emb)
             caption_emb = self.text_projection(caption_emb)
 
         cui_emb = []
         if cuis is not None:
             for i in range(len(cuis)):
-                cui_emb.append(self.text_encoder(input_ids = cuis[i][0], attention_mask = cuis[i][1]).last_hidden_state[:, 0, :])
+                if return_sequence:
+                    cui_emb.append(self.text_encoder(input_ids = cuis[i][0], attention_mask = cuis[i][1]).last_hidden_state)
+                else:
+                    cui_emb.append(self.text_encoder(input_ids = cuis[i][0], attention_mask = cuis[i][1]).last_hidden_state[:, 0, :])
+
             cui_emb = torch.stack(cui_emb)
             cui_emb = self.text_projection(cui_emb)
 

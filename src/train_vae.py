@@ -9,7 +9,7 @@ import datetime
 def train(args):
     if not os.path.exists("./models"):os.mkdir("./models")
     
-    res_path = os.path.join("./results", f"vae_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')}")
+    res_path = os.path.join("./results", f"vae_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
     os.mkdir(res_path)
 
     vae = VAE().to(args.device)
@@ -20,6 +20,7 @@ def train(args):
         data_gen = vae_data_generator(args.data_path, batch_size=args.batch_size)
         total_batches = get_total_batches(args.data_path, phase='train', batch_size=args.batch_size, top_k_cui=None)
 
+        vae.train()
         total_loss = 0
         for base_images, y in tqdm(data_gen, desc=f"Epoch {epoch+1}", total=total_batches):
             base_images = base_images.to(args.device)
@@ -34,6 +35,7 @@ def train(args):
 
             total_loss += loss.item()
         
+        vae.eval()
         val_gen = vae_data_generator(args.data_path, phase="valid", batch_size=1)
         val_total_batches = get_total_batches(args.data_path, phase='valid', batch_size=1, top_k_cui=None)
         total_val_loss = 0
