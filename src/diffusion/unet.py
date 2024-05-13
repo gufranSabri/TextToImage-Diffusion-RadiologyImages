@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers import AutoModel
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None, residual=False):
@@ -23,7 +24,7 @@ class DoubleConv(nn.Module):
             return self.double_conv(x)
 
 class Down(nn.Module):
-    def __init__(self, in_channels, out_channels, emb_dim=128):
+    def __init__(self, in_channels, out_channels, emb_dim=256):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
             nn.MaxPool2d(2),
@@ -46,7 +47,7 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    def __init__(self, in_channels, out_channels, emb_dim=128):
+    def __init__(self, in_channels, out_channels, emb_dim=256):
         super().__init__()
 
         self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
@@ -71,7 +72,7 @@ class Up(nn.Module):
         return x + emb
     
 class CrossAttention(nn.Module):
-    def __init__(self, channels, image_size, attention_dim, text_emb_dim=128):
+    def __init__(self, channels, image_size, attention_dim, text_emb_dim=256):
         super(CrossAttention, self).__init__()
         self.channels = channels
         self.attention_dim = attention_dim
@@ -123,96 +124,63 @@ class SelfAttention(nn.Module):
         attention_value = self.ff(attention_value) + attention_value
         return attention_value.swapaxes(2, 1).view(-1, self.channels, self.image_size, self.image_size)
     
-class UNet_Simple(nn.Module):
-    def __init__(self, clip, c_in=1, c_out=1, time_dim = 128, device="cuda"):
-        super().__init__()
-        self.device = device
-        self.time_dim = time_dim
-        self.inc = DoubleConv(c_in, 64)
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 256)
-        self.bot1 = DoubleConv(256, 512)
-        self.bot2 = DoubleConv(512, 512)
-        self.bot3 = DoubleConv(512, 256)
-        self.up1 = Up(512, 128)
-        self.up2 = Up(256, 64)
-        self.up3 = Up(128, 64)
-        self.outc = nn.Conv2d(64, c_out, kernel_size=1)
-
-        self.text_encoder = clip
-
+class TextEncoder(nn.Module):
+    def __init__(self, proj_dim=256):
+        super(TextEncoder, self).__init__()
+        self.text_dim = proj_dim
+        
+        self.text_encoder = AutoModel.from_pretrained('zzxslp/RadBERT-RoBERTa-4m')
+        self.projector = nn.Linear(768, proj_dim)
+    
         for param in self.text_encoder.parameters():
             param.requires_grad = False
 
-    def pos_encoding(self, t, channels):
-        inv_freq = 1.0 / (
-            10000
-            ** (torch.arange(0, channels, 2, device=self.device).float() / channels)
-        )
-        pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
-        pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
-        pos_enc = torch.cat([pos_enc_a, pos_enc_b], dim=-1)
-        return pos_enc
+    def forward(self, captions, return_sequence=False):
+        caption_emb = []
+        for i in range(len(captions)):
+            if return_sequence:
+                caption_emb.append(self.text_encoder(input_ids = captions[i][0], attention_mask = captions[i][1]).last_hidden_state)
+            else:
+                caption_emb.append(self.text_encoder(input_ids = captions[i][0], attention_mask = captions[i][1]).last_hidden_state[:, 0, :])
 
-    def forward(self, x, t, text):
-        t = t.unsqueeze(-1).type(torch.float)
-        t = self.pos_encoding(t, self.time_dim)
+        caption_emb = torch.stack(caption_emb)
+        caption_emb = self.projector(caption_emb)
 
-        _, text_emb, _ = self.text_encoder(None, text, None)
-        text_emb = text_emb.squeeze(1)
-        t += text_emb
-
-        x1 = self.inc(x)
-        x2 = self.down1(x1, t)
-        x3 = self.down2(x2, t)
-        x4 = self.down3(x3, t)
-
-        x4 = self.bot1(x4)
-        x4 = self.bot2(x4)
-        x4 = self.bot3(x4)
-
-        x = self.up1(x4, x3, t)
-        x = self.up2(x, x2, t)
-        x = self.up3(x, x1, t)
-        output = self.outc(x)
-
-        return output
+        return caption_emb
 
 class UNet(nn.Module):
-    def __init__(self, clip, c_in=1, c_out=1, time_dim=128, use_cross_atn = True, device="cuda"):
+    def __init__(self, c_in=1, c_out=1, time_dim=256, image_size=64, device="cuda"):
         super().__init__()
         self.device = device
         self.time_dim = time_dim
-        self.use_cross_atn = use_cross_atn
 
         self.inc = DoubleConv(c_in, 64)
         self.down1 = Down(64, 128)
-        self.sa1 = SelfAttention(128, 32)
-        if use_cross_atn: self.cross_attention1 = CrossAttention(128, 32, 128)
+        self.sa1 = SelfAttention(128, image_size//2)
+        self.cross_attention1 = CrossAttention(128, image_size//2, 128)
         self.down2 = Down(128, 256)
-        self.sa2 = SelfAttention(256, 16)
-        if use_cross_atn: self.cross_attention2 = CrossAttention(256, 16, 256)
+        self.sa2 = SelfAttention(256, image_size//4)
+        self.cross_attention2 = CrossAttention(256, image_size//4, 256)
         self.down3 = Down(256, 256)
-        self.sa3 = SelfAttention(256, 8)
-        if use_cross_atn: self.cross_attention3 = CrossAttention(256, 8, 256)
+        self.sa3 = SelfAttention(256, image_size//8)
+        self.cross_attention3 = CrossAttention(256, image_size//8, 256)
 
         self.bot1 = DoubleConv(256, 512)
         self.bot2 = DoubleConv(512, 512)
         self.bot3 = DoubleConv(512, 256)
-
+        
         self.up1 = Up(512, 128)
-        self.sa4 = SelfAttention(128, 16)
-        if use_cross_atn: self.ca4 = CrossAttention(128, 16, 128)
+        self.sa4 = SelfAttention(128, image_size//4)
+        self.ca4 = CrossAttention(128, image_size//4, 128)
         self.up2 = Up(256, 64)
-        self.sa5 = SelfAttention(64, 32)
-        if use_cross_atn: self.ca5 = CrossAttention(64, 32, 64)
+        self.sa5 = SelfAttention(64, image_size//2)
+        self.ca5 = CrossAttention(64, image_size//2, 64)
         self.up3 = Up(128, 64)
-        self.sa6 = SelfAttention(64, 64)
-        if use_cross_atn: self.ca6 = CrossAttention(64, 64, 64)
+        self.sa6 = SelfAttention(64, image_size)
+        self.ca6 = CrossAttention(64, image_size, 64)
         self.outc = nn.Conv2d(64, c_out, kernel_size=1)
 
-        self.text_encoder = clip
+        self.text_encoder = TextEncoder()
 
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (
@@ -225,29 +193,29 @@ class UNet(nn.Module):
         return pos_enc
 
     def forward(self, x, t, text):
+        text_emb, seq_text_emb = None, None
+
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
 
-        _, text_emb, _ = self.text_encoder(None, text, None)
-        text_emb = text_emb.squeeze(1)
-        
-        seq_text_emb = None
-        if self.use_cross_atn:
-            _, seq_text_emb, _ = self.text_encoder(None, text, None, return_sequence=True)
+        if text is not None:
+            text_emb= self.text_encoder(text)
+            seq_text_emb = self.text_encoder(text, return_sequence=True)
+            text_emb = text_emb.squeeze(1)
             seq_text_emb = seq_text_emb.squeeze(1)
 
-        t += text_emb
+            t += text_emb
 
         x1 = self.inc(x)
         x2 = self.down1(x1, t)
         x2 = self.sa1(x2)
-        x2 = self.cross_attention1(x2, seq_text_emb)
+        if text is not None: x2 = self.cross_attention1(x2, seq_text_emb)
         x3 = self.down2(x2, t)
         x3 = self.sa2(x3)
-        x3 = self.cross_attention2(x3, seq_text_emb)
+        if text is not None: x3 = self.cross_attention2(x3, seq_text_emb)
         x4 = self.down3(x3, t)
         x4 = self.sa3(x4)
-        x4 = self.cross_attention3(x4, seq_text_emb)
+        if text is not None: x4 = self.cross_attention3(x4, seq_text_emb)
 
         x4 = self.bot1(x4)
         x4 = self.bot2(x4)
@@ -255,13 +223,13 @@ class UNet(nn.Module):
 
         x = self.up1(x4, x3, t)
         x = self.sa4(x)
-        x = self.ca4(x, seq_text_emb)
+        if text is not None: x = self.ca4(x, seq_text_emb)
         x = self.up2(x, x2, t)
         x = self.sa5(x)
-        x = self.ca5(x, seq_text_emb)
+        if text is not None: x = self.ca5(x, seq_text_emb)
         x = self.up3(x, x1, t)
         x = self.sa6(x)
-        x = self.ca6(x, seq_text_emb)
+        if text is not None: x = self.ca6(x, seq_text_emb)
 
         output = self.outc(x)
 

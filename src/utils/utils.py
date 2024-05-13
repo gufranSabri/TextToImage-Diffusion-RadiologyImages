@@ -66,7 +66,7 @@ def vae_data_generator(data_path, phase='train', base_image_size = 64, y_image_s
 
 def diffusion_data_generator(data_path, phase='train', return_cui = False, img_channels = 1, image_size = 64, batch_size=32, top_k_cui = 20):
     transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(80),
+        torchvision.transforms.Resize(image_size + 32),
         torchvision.transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0), interpolation=Image.BICUBIC),
         torchvision.transforms.Grayscale(num_output_channels=img_channels),
         torchvision.transforms.ToTensor(),

@@ -1,7 +1,7 @@
 import torch
 import torch.optim as optim
 from vae.vae import VAE, VAELoss
-from utils import vae_data_generator, save_images, get_total_batches
+from utils.utils import vae_data_generator, save_images, get_total_batches
 from tqdm import tqdm
 import os
 import datetime
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     parser.add_argument("-data_path", type=str, default="./data/rocov2")
     parser.add_argument("-device", type=str, default="cuda")
     parser.add_argument("-batch_size", type=int, default=16)
-    parser.add_argument("-num_epochs", type=int, default=10)
+    parser.add_argument("-num_epochs", type=int, default=100)
     args = parser.parse_args()
 
     train(args)

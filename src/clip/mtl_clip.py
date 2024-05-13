@@ -68,7 +68,7 @@ class MTL_CLIP(nn.Module):
                 caption_embed = caption_embeddings[j]
                 
                 caption_similarity = F.cosine_similarity(image_embed.unsqueeze(0), caption_embed.unsqueeze(0))
-                caption_similarity = torch.clamp(caption_similarity, min=0, max=1)
+                caption_similarity = F.sigmoid(caption_similarity)
 
                 caption_similarities[i][j] = caption_similarity
         
@@ -78,17 +78,23 @@ class MTL_CLIP(nn.Module):
                 cui_embed = cui_embeddings[j]
 
                 cui_similarity = F.cosine_similarity(image_embed.unsqueeze(0), cui_embed.unsqueeze(0))
-                cui_similarity = torch.clamp(cui_similarity, min=0, max=1)
+                cui_similarity = F.sigmoid(cui_similarity)
 
                 cui_similarities[i][j] = cui_similarity
 
-        caption_loss = F.binary_cross_entropy(caption_similarities, caption_labels, reduction='none')
-        cui_loss = F.binary_cross_entropy(cui_similarities, cui_labels, reduction='none')
+        caption_loss = F.binary_cross_entropy(caption_similarities, caption_labels)
+        cui_loss = F.binary_cross_entropy(cui_similarities, cui_labels)
 
-        caption_loss = caption_loss.mean()
-        cui_loss = cui_loss.mean()
+        caption_loss = caption_loss
+        cui_loss = cui_loss
         
         return caption_loss, cui_loss, caption_similarities, cui_similarities
     
     def predict_cui(self, cui_similarities):
         return torch.argmax(cui_similarities, dim=1)
+    
+if __name__ == "__main__":
+    x = torch.randn(1, 10)
+    print(F.sigmoid(x))
+    print(F.sigmoid(x[0]))
+    print(F.sigmoid(x[0][0]))

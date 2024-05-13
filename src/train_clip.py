@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 from torch import optim
-from utils import *
+from utils.utils import *
 from transformers import AutoTokenizer
 import argparse
 import time
