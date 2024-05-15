@@ -10,9 +10,11 @@ def save_images(images, path, **kwargs):
     im = Image.fromarray(ndarr)
     im.save(path)
 
-def get_total_batches(data_path, phase='train', batch_size=32, top_k_cui = 20):
+def get_total_batches(data_path, phase='train', batch_size=32, top_k_cui = 20, use_transformed_caption = True):
     df_name = f"{phase}.csv"
-    if top_k_cui is not None: df_name = f"{phase}_top_{top_k_cui}_cui.csv"
+    if top_k_cui is not None: 
+        if use_transformed_caption: df_name = f"{phase}_top_{top_k_cui}_key_cf_knee.csv"
+        else: df_name = f"{phase}_top_{top_k_cui}_cui.csv"
 
     df = pd.read_csv(os.path.join(data_path, "processed", df_name))
     # df = df.sample(n=992).reset_index(drop=True)
@@ -64,7 +66,7 @@ def vae_data_generator(data_path, phase='train', base_image_size = 64, y_image_s
 
         yield base_images, y_images
 
-def diffusion_data_generator(data_path, phase='train', return_cui = False, img_channels = 1, image_size = 64, batch_size=32, top_k_cui = 20):
+def diffusion_data_generator(data_path, phase='train', return_cui = False, img_channels = 1, image_size = 64, batch_size=32, top_k_cui = 20, use_transformed_caption = True):
     transforms = torchvision.transforms.Compose([
         torchvision.transforms.Resize(image_size + 32),
         torchvision.transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0), interpolation=Image.BICUBIC),
@@ -74,7 +76,9 @@ def diffusion_data_generator(data_path, phase='train', return_cui = False, img_c
     ])
 
     df_name = f"{phase}.csv"
-    if top_k_cui is not None: df_name = f"{phase}_top_{top_k_cui}_cui.csv"
+    if top_k_cui is not None: 
+        if use_transformed_caption: df_name = f"{phase}_top_{top_k_cui}_key_cf_knee.csv"
+        else: df_name = f"{phase}_top_{top_k_cui}_cui.csv"
     
     df = pd.read_csv(os.path.join(data_path, "processed", df_name))
     df = df.sample(frac=1).reset_index(drop=True)
@@ -86,12 +90,16 @@ def diffusion_data_generator(data_path, phase='train', return_cui = False, img_c
     for b in range(df.shape[0]//batch_size):
         images, captions, cuis, cui_captions = [], [], [], []
         for i in range(b*batch_size, (b+1)*batch_size):
-            img_path = os.path.join(data_path.replace("/processed", ""), f"{phase}_images",f"{df.iloc[i]['ID']}.jpg")
+            image_extension = ".jpg" if "ROCO" in df.iloc[i]['ID'] == 3 else ".png"
+            img_path = os.path.join(data_path.replace("/processed", ""), f"{phase}_images",f"{df.iloc[i]['ID']}{image_extension}")
             img = Image.open(img_path)
             img = transforms(img)
             images.append(img)
 
             caption = df.iloc[i]['Caption'] + " " + df.iloc[i]['CUI_caption']
+            if use_transformed_caption:
+                caption = df.iloc[i]['transformed_caption']
+            
             captions.append(caption)
 
             if return_cui: 
