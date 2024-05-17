@@ -34,7 +34,7 @@ for i, line in enumerate(new_lines):
 
 print(count)
 
-with open(os.path.join("./data/rocov2", "processed", f"{phase}_top_20_key_cleaned.csv")
+with open(os.path.join("./data/rocov2", "processed", f"{phase}_top_20_key_c.csv")
 , 'w') as f:
     for i, line in enumerate(final_new_lines):
         if not line[-1] == '"' and i != 0:line += '"'

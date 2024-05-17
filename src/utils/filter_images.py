@@ -40,5 +40,3 @@ drop_rows = filter_images(images, quality_threshold, brightness_threshold)
 df.drop(drop_rows, inplace=True)
 
 df.to_csv(os.path.join("./data/rocov2", "processed", f"{phase}_top_20_key_cf.csv"), index=False)
-    
-
