@@ -158,7 +158,7 @@ class ClipTextEncoder(nn.Module):
 
         model, _ = clip.load("ViT-B/32", jit=False)
         if os.path.exists('./models/clip.pth'):
-            checkpoint = torch.load('./models/clip.pth')
+            checkpoint = torch.load('./models/clip_keywords.pth')
             model.load_state_dict(checkpoint['model_state_dict'])
             
         self.text_encoder = model

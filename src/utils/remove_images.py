@@ -3,9 +3,9 @@ import cv2
 import os
 
 
-path1 = "./data/rocov2/processed/train_top_20_key_cf.csv"
-path2 = "./data/rocov2/processed/test_top_20_key_cf.csv"
-path3 = "./data/rocov2/processed/valid_top_20_key_cf.csv"
+path1 = "./data/rocov2/processed/train_top10_kcf.csv"
+path2 = "./data/rocov2/processed/test_top10_kcf.csv"
+path3 = "./data/rocov2/processed/valid_top10_kcf.csv"
 
 df1 = pd.read_csv(path1)
 df2 = pd.read_csv(path2)

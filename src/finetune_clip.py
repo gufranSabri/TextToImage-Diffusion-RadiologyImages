@@ -16,7 +16,7 @@ def main(args):
     model, preprocess = clip.load("ViT-B/32", device=device, jit=False)
     model = model.to(device)
 
-    df = pd.read_csv(f"{args.data_path}/processed/{args.phase}_top10_kcf.csv")
+    df = pd.read_csv(f"{args.data_path}/processed/train_top10_kcf.csv")
 
     images = df["ID"].tolist()
     captions = df["keywords"].tolist()
@@ -73,7 +73,6 @@ if __name__ == "__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument('-data_path',dest='data_path', default='./data/rocov2')
     parser.add_argument('-epochs',dest='epochs', default=500)
-    parser.add_argument('-phase',dest='phase', default='train')
     parser.add_argument('-device',dest='device', default='cuda')
     args=parser.parse_args()
 
