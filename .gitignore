@@ -4,4 +4,4 @@
 /src/__pycache__/*
 /src/diffusion/__pycache__/*
 /src/utils/__pycache__/*
-*DS_Store*
+.DS_Store/*
