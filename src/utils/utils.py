@@ -32,7 +32,7 @@ def save_images(images, path, **kwargs):
 def get_total_batches(data_path, phase='train', batch_size=32, top_k_cui = 20):
     df_name = f"{phase}.csv"
     if top_k_cui is not None: 
-        df_name = f"{phase}_top_{top_k_cui}_key_cf_xray.csv"
+        df_name = f"{phase}_top{top_k_cui}_kcf.csv"
 
     df = pd.read_csv(os.path.join(data_path, "processed", df_name))
 
@@ -45,12 +45,12 @@ def diffusion_data_generator(data_path, phase='train', image_size = 64, batch_si
         torchvision.transforms.Lambda(lambda x: torchvision.transforms.functional.equalize(x)),
         torchvision.transforms.Grayscale(num_output_channels=1),
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize((0.5,), (0.5,)),
+        torchvision.transforms.Normalize((0.4,), (0.2,)),
     ])
 
     df_name = f"{phase}.csv"
     if top_k_cui is not None: 
-        df_name = f"{phase}_top_{top_k_cui}_key_cf_xray.csv"
+        df_name = f"{phase}_top{top_k_cui}_kcf.csv"
     
     df = pd.read_csv(os.path.join(data_path, "processed", df_name))
     if shuffle: df = df.sample(frac=1).reset_index(drop=True)
@@ -68,7 +68,7 @@ def diffusion_data_generator(data_path, phase='train', image_size = 64, batch_si
             img = transforms(img)
             images.append(img)
 
-            caption = df.iloc[i]['Caption'] + " " + df.iloc[i]['CUI_caption']
+            caption = df.iloc[i]['Caption']
             if use_keywords: caption = df.iloc[i]['keywords']
             
             captions.append(caption)

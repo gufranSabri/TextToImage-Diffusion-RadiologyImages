@@ -178,27 +178,15 @@ class ClipTextEncoder(nn.Module):
         else:
             caption_emb = caption_emb.unsqueeze(1).repeat(1, 64, 1)
             return caption_emb.repeat(1, 64, 1)
-        
-        #     for j in range(len(captions[0])):
-        #         token = torch.tensor([[captions[i][j]]]).to(self.device)
-        #         token_emb = self.text_encoder.encode_text(token)
-        #         sent_emb.append(token_emb)
-
-        #     sent_emb = torch.stack(sent_emb)
-        #     sent_emb = sent_emb.squeeze(1)
-
-        #     caption_emb.append(sent_emb)
-
-        # caption_emb = torch.stack(caption_emb).to(torch.float32)
-        # caption_emb = self.projector(caption_emb)
-
-        # return caption_emb
 
 class UNet(nn.Module):
-    def __init__(self, c_in=1, c_out=1, time_dim=256, image_size=64, use_clip = False, device="cuda"):
+    def __init__(self, image_size=64, use_clip = False, device="cuda"):
         super().__init__()
         self.device = device
-        self.time_dim = time_dim
+        self.time_dim = 256
+
+        c_in = 1
+        c_out = 1
 
         self.inc = DoubleConv(c_in, 64)
         self.down1 = Down(64, 128)
@@ -227,14 +215,14 @@ class UNet(nn.Module):
         self.outc = nn.Conv2d(64, c_out, kernel_size=1)
 
         if use_clip:
-            print("Initializing CLIP Text Encoder")
             self.text_encoder = ClipTextEncoder(device = device)
+            print("Initializing CLIP")
         else:
-            print("Initializing RadBERT Text Encoder")
             self.text_encoder = TextEncoder()
+            print("Initializing BERT")
         
-        print("Initialized VGG_UNet")
-
+        print("Initialized Unet")
+        
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (
             10000
@@ -287,14 +275,17 @@ class UNet(nn.Module):
         output = self.outc(x)
 
         return output
-    
 
 class VGG16_Unet(torch.nn.Module):
-    def __init__(self, c_in=1, c_out=1, time_dim=256, image_size=64, use_clip = False, device="cuda"):
+    def __init__(self, image_size=64, use_clip = False, freeze=False, device="cuda"):
         super(VGG16_Unet, self).__init__()
 
         self.device = device
-        self.time_dim = time_dim
+        self.device = device
+        self.time_dim = 256
+
+        c_in = 1
+        c_out = 1
 
         vgg_pretrained_features = torchvision.models.vgg16(weights = "VGG16_Weights.DEFAULT").features
         self.slice1 = torch.nn.Sequential()
@@ -333,15 +324,16 @@ class VGG16_Unet(torch.nn.Module):
         self.outc = nn.Conv2d(64, c_out, kernel_size=1)
 
         if use_clip:
-            print("Initializing CLIP Text Encoder")
             self.text_encoder = ClipTextEncoder(device = device)
+            print("Initializing CLIP")
         else:
-            print("Initializing RadBERT Text Encoder")
             self.text_encoder = TextEncoder()
+            print("Initializing BERT")
         
-        self.freeze_slices()
-
-        print("Initialized VGG_UNet")
+        print(f"Initialized VGG_UNet (Frozen for half:{freeze})")
+        
+        if freeze:
+            self.freeze_slices()
 
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (

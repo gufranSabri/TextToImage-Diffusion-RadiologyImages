@@ -27,16 +27,21 @@ def filter_images(images, quality_threshold, brightness_threshold):
 
     return drop_rows
 
-phase = 'test'
-df = pd.read_csv(os.path.join("./data/rocov2", "processed", f"{phase}_top_20_key_c.csv"))
+def main(phase):
+    df = pd.read_csv(os.path.join("./data/rocov2", "processed", f"{phase}_top10_kc.csv"))
 
-images = []
-quality_threshold = 4.0  # Adjust based on desired quality
-brightness_threshold = (50, 200)  # Adjust based on desired brightness range
-for filename in df.ID:
-    filtered_images = images.append(os.path.join("./data/rocov2", f"{phase}_images", filename+".jpg"))
+    images = []
+    quality_threshold = 4.0  # Adjust based on desired quality
+    brightness_threshold = (50, 200)  # Adjust based on desired brightness range
+    for filename in df.ID:
+        images.append(os.path.join("./data/rocov2", f"{phase}_images", filename+".jpg"))
 
-drop_rows = filter_images(images, quality_threshold, brightness_threshold)
-df.drop(drop_rows, inplace=True)
+    drop_rows = filter_images(images, quality_threshold, brightness_threshold)
+    df.drop(drop_rows, inplace=True)
 
-df.to_csv(os.path.join("./data/rocov2", "processed", f"{phase}_top_20_key_cf.csv"), index=False)
+    df.to_csv(os.path.join("./data/rocov2", "processed", f"{phase}_top10_kcf.csv"), index=False)
+    print(df.shape)
+
+main("train")
+main("valid")
+main("test")

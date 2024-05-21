@@ -16,7 +16,7 @@ def main(args):
     model, preprocess = clip.load("ViT-B/32", device=device, jit=False)
     model = model.to(device)
 
-    df = pd.read_csv(f"{args.data_path}/processed/{args.phase}_top_20_key_cf.csv")
+    df = pd.read_csv(f"{args.data_path}/processed/{args.phase}_top10_kcf.csv")
 
     images = df["ID"].tolist()
     captions = df["keywords"].tolist()
@@ -67,7 +67,7 @@ def main(args):
 
     torch.save({
         'model_state_dict': model.state_dict(),
-    }, './models/clip.pth')
+    }, './models/clip_keywords.pth')
 
 if __name__ == "__main__":
     parser=argparse.ArgumentParser()

@@ -1,3 +1,7 @@
-/data/*
+/data/rocov2/*images/*
 /results/*
 /models/*
+/src/__pycache__/*
+/src/diffusion/__pycache__/*
+/src/utils/__pycache__/*
+*DS_Store*
