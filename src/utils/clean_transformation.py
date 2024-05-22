@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 def main(phase):
-    file_path = os.path.join("./data/rocov2", "processed", f"{phase}_top10_k.csv")
+    file_path = os.path.join("./data/rocov2", "processed", f"{phase}_top20_k.csv")
 
     with open(file_path, 'r') as f:
         lines = f.readlines()
@@ -37,7 +37,7 @@ def main(phase):
     print(count)
     print()
 
-    with open(os.path.join("./data/rocov2", "processed", f"{phase}_top10_kc.csv")
+    with open(os.path.join("./data/rocov2", "processed", f"{phase}_top20_kc.csv")
     , 'w') as f:
         for i, line in enumerate(final_new_lines):
             if not line[-1] == '"' and i != 0:line += '"'

@@ -17,7 +17,7 @@ def filtered_caption(caption):
     return response['response']
 
 def main(data_path, phase):
-    df = pd.read_csv(os.path.join(data_path, "processed", f"{phase}_top10.csv"))
+    df = pd.read_csv(os.path.join(data_path, "processed", f"{phase}_top20.csv"))
 
     transformed_captions = []
     for i in tqdm(range(len(df)), desc=f"Transforming Query for {phase}"):
@@ -26,7 +26,7 @@ def main(data_path, phase):
 
     df['keywords'] = transformed_captions
     df = df[df['keywords'] != 'invalid']
-    df.to_csv(os.path.join(data_path, "processed", f"{phase}_top10_k.csv"), index=False)
+    df.to_csv(os.path.join(data_path, "processed", f"{phase}_top20_k.csv"), index=False)
 
 if __name__ == "__main__":
     DATA_PATH = "./data/rocov2"

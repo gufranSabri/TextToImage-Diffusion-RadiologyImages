@@ -28,7 +28,7 @@ def filter_images(images, quality_threshold, brightness_threshold):
     return drop_rows
 
 def main(phase):
-    df = pd.read_csv(os.path.join("./data/rocov2", "processed", f"{phase}_top10_kc.csv"))
+    df = pd.read_csv(os.path.join("./data/rocov2", "processed", f"{phase}_top20_kc.csv"))
 
     images = []
     quality_threshold = 4.0  # Adjust based on desired quality
@@ -39,7 +39,7 @@ def main(phase):
     drop_rows = filter_images(images, quality_threshold, brightness_threshold)
     df.drop(drop_rows, inplace=True)
 
-    df.to_csv(os.path.join("./data/rocov2", "processed", f"{phase}_top10_kcf.csv"), index=False)
+    df.to_csv(os.path.join("./data/rocov2", "processed", f"{phase}_top20_kcf.csv"), index=False)
     print(df.shape)
 
 main("train")

@@ -6,7 +6,7 @@ import warnings
 from pprint import pprint
 warnings.filterwarnings("ignore")
 
-k = 10
+k = 20
 
 DATA_PATH = "./data/rocov2"
 
