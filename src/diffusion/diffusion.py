@@ -65,7 +65,7 @@ class Diffusion:
         model.eval()
         with torch.no_grad():
             x = torch.randn((n, 1, self.img_size, self.img_size)).to(self.device)
-            for i in tqdm(reversed(range(1, self.noise_steps)), position=0, desc="Sampling"):
+            for i in tqdm(reversed(range(1, self.noise_steps)), position=0, desc="Sampling", total=self.noise_steps-1):
                 t = (torch.ones(n) * i).long().to(self.device)
                 predicted_noise = model(x, t, text)
                 alpha = self.alpha[t][:, None, None, None]

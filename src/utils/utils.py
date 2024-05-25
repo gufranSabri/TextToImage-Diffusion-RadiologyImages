@@ -7,6 +7,12 @@ import numpy as np
 
 import clip
 
+caption_mode = {
+    "CAPTION": 0,
+    "CAPTION_CUI": 1,
+    "KEYWORDS": 2
+}
+
 class CLIP_dataset():
     def __init__(self, image_list, list_captions, preprocessor):
         self.image_list = image_list
@@ -38,7 +44,7 @@ def get_total_batches(data_path, phase='train', batch_size=32, top_k_cui = 20):
 
     return df.shape[0]//batch_size
 
-def diffusion_data_generator(data_path, phase='train', image_size = 64, batch_size=32, top_k_cui = 20, use_keywords = True, shuffle=True):
+def diffusion_data_generator(data_path, phase='train', image_size = 64, batch_size=32, top_k_cui = 20, shuffle=True, cm = caption_mode["KEYWORDS"]):
     transforms = torchvision.transforms.Compose([
         torchvision.transforms.Resize(image_size + 32),
         torchvision.transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0), interpolation=Image.BICUBIC),
@@ -69,20 +75,21 @@ def diffusion_data_generator(data_path, phase='train', image_size = 64, batch_si
             images.append(img)
 
             caption = df.iloc[i]['Caption']
-            if use_keywords: caption = df.iloc[i]['keywords']
+            if cm == caption_mode["CAPTION_CUI"]: caption = df.iloc[i]['Caption'] + " " + df.iloc[i]['CUI_caption']
+            if cm == caption_mode["KEYWORDS"]: caption = df.iloc[i]['keywords']
             
             captions.append(caption)
 
         images = torch.stack(images)
         yield images, captions
 
-def test_diffuser(model, diffusion_model, text_tokenizer, save_path, image_size = 64, k = 20, use_clip = False, device = "cuda"):
+def test_diffuser(model, diffusion_model, text_tokenizer, save_path, image_size = 64, k = 20, use_clip = False, cm = caption_mode["KEYWORDS"], device = "cuda"):
     model.eval()
 
-    generator = diffusion_data_generator("./data/rocov2", phase="test", batch_size=1, image_size = image_size, top_k_cui=k, shuffle=False)
+    generator = diffusion_data_generator("./data/rocov2", phase="test", batch_size=1, image_size = image_size, top_k_cui=k, shuffle=False, cm = cm)
     count = 0
     for _, captions in generator:
-
+        print(captions)
         if not use_clip:
           for i, c in enumerate(captions):
             inputs = text_tokenizer(c, return_tensors="pt", max_length=64, truncation=True, padding="max_length")

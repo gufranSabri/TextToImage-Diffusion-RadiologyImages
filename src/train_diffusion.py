@@ -36,18 +36,18 @@ def train(args):
     os.mkdir(sample_path)
 
     with open(os.path.join(res_path, "logs.txt"), 'a') as f:
-      f.write(f"Model: {args.model}\n\n")
+      f.write(f"Model: {args.model}\n")
       f.write(f"Batch Size: {args.batch_size}\n")
       f.write(f"Image Size: {args.image_size}\n")
       f.write(f"Top K CUI: {args.k}\n")
-      f.write(f"Use Keywords: {args.use_keywords}\n")
-      f.write(f"Use CLIP: {args.use_clip}\n")
+      f.write(f"Caption mode: {args.caption_mode}\n")
+      f.write(f"Use CLIP: {args.use_clip}\n\n")
 
     print(f"Epochs: {args.epochs}")
     print(f"Batch Size: {args.batch_size}")
     print(f"Image Size: {args.image_size}")
     print(f"Top K CUI: {args.k}")
-    print(f"Use Keywords: {args.use_keywords}")
+    print(f"Caption mode: {args.caption_mode}")
     print(f"Use CLIP: {args.use_clip}")
     print(f"Model: {args.model}\n=====================================\n")
 
@@ -78,7 +78,13 @@ def train(args):
     model.train()
     total_batches = get_total_batches(args.data_path, phase='train', batch_size=args.batch_size, top_k_cui=args.k)
     for epoch in range(int(args.epochs)):
-      gen = diffusion_data_generator(args.data_path, phase="train", batch_size=args.batch_size, image_size = args.image_size, top_k_cui=args.k, use_keywords=args.use_keywords)
+      gen = diffusion_data_generator(
+        args.data_path, phase="train",
+        batch_size=args.batch_size, 
+        image_size = args.image_size, 
+        top_k_cui=args.k, 
+        cm=int(args.caption_mode)
+      )
 
       total_loss = 0
       for images, captions in tqdm(gen, desc=f"Epoch [{epoch+1}/{args.epochs}]", total=total_batches):
@@ -109,7 +115,15 @@ def train(args):
         total_loss += loss.item()
 
       if (epoch+1) % 10 == 0 or int(args.epochs) - (epoch+1) < 5:
-        test_gen = diffusion_data_generator(args.data_path, phase="test", batch_size=4, image_size = args.image_size, top_k_cui=args.k)
+        test_gen = diffusion_data_generator(
+          args.data_path, 
+          phase="test", 
+          batch_size=4, 
+          image_size = args.image_size,
+          top_k_cui=args.k, 
+          cm=args.caption_mode
+        )
+
         captions = None
         model.eval()
         for images, captions in test_gen:
@@ -138,7 +152,7 @@ def train(args):
         torch.save({
             'model_state_dict': ema_model.state_dict(),
             'use_clip': args.use_clip,
-            'use_keywords': args.use_keywords,
+            'caption_mode': int(args.caption_mode),
             'image_size': args.image_size,
             'k': args.k
         }, os.path.join(model_path, f"{args.name}_{epoch+1}.pth"))
@@ -147,8 +161,6 @@ def train(args):
 
       if unfreeze and (epoch+1) == int(args.epochs)//2:
         model.unfreeze_slices()
-
-    #test_diffuser(model, diffusion, text_tokenizer, sample_path, image_size = 64, k = 20, use_clip=args.use_clip, device = args.device)
       
 if __name__ == "__main__":
     parser=argparse.ArgumentParser()
@@ -158,7 +170,7 @@ if __name__ == "__main__":
     parser.add_argument('-batch_size',dest='batch_size', default=12, type=int)
     parser.add_argument('-image_size',dest='image_size', default=64, type=int)
     parser.add_argument("-k", dest="k", default=10, type=int)
-    parser.add_argument('-use_keywords',dest='use_keywords', default=False, type=bool)
+    parser.add_argument('-caption_mode',dest='caption_mode', default=2, type=int)
     parser.add_argument('-use_clip',dest='use_clip', default=False, type=bool)
     parser.add_argument('-device',dest='device', default='cuda')
     parser.add_argument('-name',dest='name', required=True)
