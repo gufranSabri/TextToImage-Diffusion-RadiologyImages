@@ -11,6 +11,7 @@ from PIL import Image
 from torchvision import models
 import warnings
 import pandas as pd
+
 warnings.filterwarnings("ignore")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -25,7 +26,7 @@ def lpips_evaluation(args, test_samples_path, real_test_images):
         if i % 100 == 0:
             print(f"Processing image {i}...")
             
-        real_image = Image.open(os.path.join(test_samples_path, real_test_images[i]))
+        real_image = Image.open(real_test_images[i]+".jpg")
         real_image = torchvision.transforms.ToTensor()(real_image).unsqueeze(0).to(args.device)
         real_image = torch.nn.functional.interpolate(real_image, size=(64, 64), mode='bilinear', align_corners=False)
 
@@ -33,55 +34,74 @@ def lpips_evaluation(args, test_samples_path, real_test_images):
         fake_image = torchvision.transforms.ToTensor()(fake_image).unsqueeze(0).to(args.device)
 
         lpips_res.append(lpips(real_image, fake_image).item())
-
-        print(lpips_res)
     
     return lpips_res
 
-def extract_features(images):
+def extract_features(images, device):
     model = models.inception_v3(pretrained=True)
     model = torch.jit.script(model)
     model.eval()
-    model = model.to('cuda') if torch.cuda.is_available() else model.cpu()
+    model = model.to(device)
 
     with torch.no_grad():
         features = model(images)
     return features
 
 def compute_fid(real_features, fake_features):
+    real_features = real_features.logits.cpu().numpy()
+    fake_features = fake_features.logits.cpu().numpy()
+
     mu_real = np.mean(real_features, axis=0)
-    sigma_real = np.cov(real_features, rowvar=False)
+    sigma_real = np.cov(real_features)
     mu_fake = np.mean(fake_features, axis=0)
-    sigma_fake = np.cov(fake_features, rowvar=False)
+    sigma_fake = np.cov(fake_features)
     
     diff = mu_real - mu_fake
-    covmean = sqrtm(sigma_real.dot(sigma_fake.T))
+    covmean = sqrtm(sigma_real @ sigma_fake)
 
-    fid = diff.dot(diff) + np.trace(sigma_real.dot(sigma_fake)) - 2 * np.real(np.trace(covmean))
+    if np.iscomplexobj(covmean):
+        covmean = covmean.real
+
+    fid = diff.dot(diff) + np.trace(sigma_real) + np.trace(sigma_fake) - 2 * np.trace(covmean)
     return fid
 
 def fid_evaluation(args, test_samples_path, real_test_images):
+    real_test_images = real_test_images[:len(test_samples_path)]
     fake_test_images = os.listdir(test_samples_path)
     fid_res = []
-    for i in range(len((os.listdir(test_samples_path)))):
+    
+    for i in range(len((os.listdir(test_samples_path))), 16):
         if i % 100 == 0:
             print(f"Processing image {i}...")
-            
-        real_image = Image.open(os.path.join(test_samples_path, real_test_images[i]))
-        real_image = torchvision.transforms.ToTensor()(real_image).unsqueeze(0).to(args.device)
-        real_image = torch.nn.functional.interpolate(real_image, size=(64, 64), mode='bilinear', align_corners=False)
 
-        fake_image = Image.open(os.path.join(test_samples_path, fake_test_images[i]))
-        fake_image = torchvision.transforms.ToTensor()(fake_image).unsqueeze(0).to(args.device)
+        real_opened_images = []
+        fake_opened_images = []
+        
+        for j in range(i, i+16):
+            real_image = Image.open(real_test_images[j]+".jpg")
+            real_image = torchvision.transforms.ToTensor()(real_image).unsqueeze(0).to(args.device)
+            real_image = torch.nn.functional.interpolate(real_image, size=(80, 80), mode='bilinear', align_corners=False)
+            real_image = real_image.mean(1, keepdim=True)
+            real_image = real_image.repeat(1, 3, 1, 1)
 
-        real_features = extract_features(real_image)
-        fake_features = extract_features(fake_image)
+            fake_image = Image.open(os.path.join(test_samples_path, fake_test_images[j]))
+            fake_image = torchvision.transforms.ToTensor()(fake_image).unsqueeze(0).to(args.device)
+            fake_image = torch.nn.functional.interpolate(fake_image, size=(80, 80), mode='bilinear', align_corners=False)
+            fake_image = fake_image.mean(1, keepdim=True)
+            fake_image = fake_image.repeat(1, 3, 1, 1)
+
+            real_opened_images.append(real_image)
+            fake_opened_images.append(fake_image)
+
+        real_opened_images = torch.cat(real_opened_images, dim=0)
+        fake_opened_images = torch.cat(fake_opened_images, dim=0)
+
+        real_features = extract_features(real_opened_images, args.device)
+        fake_features = extract_features(fake_opened_images, args.device)
 
         fid_res.append(compute_fid(real_features, fake_features))
 
-        print(fid_res)
-    
-    return fid_res
+    return sum(fid_res)/len(fid_res)
 
 def main(args):
     results_path = args.path
@@ -129,6 +149,8 @@ def main(args):
         device = args.device
     )
 
+    print("No of test images: ", len(test_samples_path), "\n")
+
     print("Computing LPIPS...")
     test_lpips = lpips_evaluation(args, test_samples_path, args.test_images)
     print(f"Mean LPIPS: {np.mean(test_lpips)}\n")
@@ -144,7 +166,7 @@ def main(args):
 if __name__ == '__main__':
     results = os.listdir("./results")
     parser = argparse.ArgumentParser()
-
+    parser.add_argument('-device', dest='device', default='cuda')
     
     for i, res in enumerate(results):
         if "Net" not in res:
@@ -155,9 +177,7 @@ if __name__ == '__main__':
     
         test_images_df = pd.read_csv(f"./data/rocov2/processed/test_top{k}_kcf.csv")
         test_images = [os.path.join("./data/rocov2/test_images", p) for p in test_images_df["ID"].values]
-        print("No of test images: ", len(test_images))
-
-        parser.add_argument('-device', dest='device', default='cuda')
+        
         args = parser.parse_args()
         args.path = os.path.join("./results", res)
         args.test_images = test_images
