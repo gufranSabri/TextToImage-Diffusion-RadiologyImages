@@ -11,6 +11,8 @@ from PIL import Image
 from torchvision import models
 import warnings
 import pandas as pd
+from utils.configs import test_amount
+from tqdm import tqdm
 
 warnings.filterwarnings("ignore")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -20,17 +22,14 @@ def lpips_evaluation(args, test_samples_path, real_test_images):
     lpips.eval()
     lpips.to(args.device)
 
-    fake_test_images = os.listdir(test_samples_path)
+    real_test_images = real_test_images[:len(os.listdir(test_samples_path))]
     lpips_res = []
-    for i in range(len((os.listdir(test_samples_path)))):
-        if i % 100 == 0:
-            print(f"Processing image {i}...")
-            
+    for i in tqdm(range(len((os.listdir(test_samples_path)))), desc="Computing LPIPS"):
         real_image = Image.open(real_test_images[i]+".jpg")
         real_image = torchvision.transforms.ToTensor()(real_image).unsqueeze(0).to(args.device)
         real_image = torch.nn.functional.interpolate(real_image, size=(64, 64), mode='bilinear', align_corners=False)
 
-        fake_image = Image.open(os.path.join(test_samples_path, fake_test_images[i]))
+        fake_image = Image.open(os.path.join(test_samples_path, f"{i+1}.jpg"))
         fake_image = torchvision.transforms.ToTensor()(fake_image).unsqueeze(0).to(args.device)
 
         lpips_res.append(lpips(real_image, fake_image).item())
@@ -66,32 +65,33 @@ def compute_fid(real_features, fake_features):
     return fid
 
 def fid_evaluation(args, test_samples_path, real_test_images):
-    real_test_images = real_test_images[:len(test_samples_path)]
-    fake_test_images = os.listdir(test_samples_path)
+    real_test_images = real_test_images[:len(os.listdir(test_samples_path))]
     fid_res = []
-    
-    for i in range(len((os.listdir(test_samples_path))), 16):
-        if i % 100 == 0:
-            print(f"Processing image {i}...")
 
+    batch_size = 32 # len(os.listdir(test_samples_path))
+    # len((os.listdir(test_samples_path))
+    for i in tqdm(range(0, test_amount, batch_size), desc="Computing FID"):
         real_opened_images = []
         fake_opened_images = []
         
-        for j in range(i, i+16):
-            real_image = Image.open(real_test_images[j]+".jpg")
-            real_image = torchvision.transforms.ToTensor()(real_image).unsqueeze(0).to(args.device)
-            real_image = torch.nn.functional.interpolate(real_image, size=(80, 80), mode='bilinear', align_corners=False)
-            real_image = real_image.mean(1, keepdim=True)
-            real_image = real_image.repeat(1, 3, 1, 1)
+        for j in range(i, i+batch_size):
+            try:
+                real_image = Image.open(real_test_images[j]+".jpg")
+                real_image = torchvision.transforms.ToTensor()(real_image).unsqueeze(0).to(args.device)
+                real_image = torch.nn.functional.interpolate(real_image, size=(80, 80), mode='bilinear', align_corners=False)
+                real_image = real_image.mean(1, keepdim=True)
+                real_image = real_image.repeat(1, 3, 1, 1)
 
-            fake_image = Image.open(os.path.join(test_samples_path, fake_test_images[j]))
-            fake_image = torchvision.transforms.ToTensor()(fake_image).unsqueeze(0).to(args.device)
-            fake_image = torch.nn.functional.interpolate(fake_image, size=(80, 80), mode='bilinear', align_corners=False)
-            fake_image = fake_image.mean(1, keepdim=True)
-            fake_image = fake_image.repeat(1, 3, 1, 1)
+                fake_image = Image.open(os.path.join(test_samples_path, f"{j+1}.jpg"))
+                fake_image = torchvision.transforms.ToTensor()(fake_image).unsqueeze(0).to(args.device)
+                fake_image = torch.nn.functional.interpolate(fake_image, size=(80, 80), mode='bilinear', align_corners=False)
+                fake_image = fake_image.mean(1, keepdim=True)
+                fake_image = fake_image.repeat(1, 3, 1, 1)
 
-            real_opened_images.append(real_image)
-            fake_opened_images.append(fake_image)
+                real_opened_images.append(real_image)
+                fake_opened_images.append(fake_image)
+            except:
+                continue
 
         real_opened_images = torch.cat(real_opened_images, dim=0)
         fake_opened_images = torch.cat(fake_opened_images, dim=0)
@@ -99,74 +99,70 @@ def fid_evaluation(args, test_samples_path, real_test_images):
         real_features = extract_features(real_opened_images, args.device)
         fake_features = extract_features(fake_opened_images, args.device)
 
+
         fid_res.append(compute_fid(real_features, fake_features))
 
-    return sum(fid_res)/len(fid_res)
+    return fid_res
 
 def main(args):
     results_path = args.path
     models_path = os.path.join(results_path, "model")
     test_samples_path = os.path.join(results_path, "test_samples")
 
-    if not os.path.exists(test_samples_path):
-        print("Creating test samples directory...\n")
-        os.mkdir(test_samples_path)
-    elif len(args.test_images) != len(os.listdir(test_samples_path)):
-        print("Cleaning test samples directory...\n")
-        for file in os.listdir(test_samples_path):
-            os.remove(os.path.join(test_samples_path, file))
-    
-    model = None
-    model_config = torch.load(os.path.join(models_path, os.listdir(models_path)[0]), map_location=args.device)
-    if "VGG" in results_path:
-        model = VGG16_Unet(device=args.device, image_size=model_config['image_size'], use_clip = model_config['use_clip']).to(args.device)
-    else:
-        model = UNet(device=args.device, image_size=model_config['image_size'], use_clip = model_config['use_clip']).to(args.device)
-    model.load_state_dict(model_config["model_state_dict"])
+    if not os.path.exists(test_samples_path) or len(os.listdir(test_samples_path)) < test_amount:
+        if not os.path.exists(test_samples_path):
+            print("Creating test samples directory...\n")
+            os.mkdir(test_samples_path)
 
-    diffusion = Diffusion(img_size=model_config['image_size'], device=args.device, scheduler_type="linear")
-    text_tokenizer = AutoTokenizer.from_pretrained('zzxslp/RadBERT-RoBERTa-4m')
+        frozen = "Frozen" in results_path
 
-    cm = None
-    if "caption_mode" in model_config.keys():
-        cm = model_config["caption_mode"]
-    else:
-        cm = caption_mode["KEYWORDS"] if model_config['use_keywords'] else caption_mode["CAPTION"]
-        cm = caption_mode["CAPTION_CUI"] if "Cui" in results_path else cm
+        model = None
+        model_config = torch.load(os.path.join(models_path, os.listdir(models_path)[0]), map_location=args.device)
+        if "VGG" in results_path:
+            model = VGG16_Unet(device=args.device, image_size=model_config['image_size'], use_clip = model_config['use_clip'], freeze=frozen).to(args.device)
+        else:
+            model = UNet(device=args.device, image_size=model_config['image_size'], use_clip = model_config['use_clip']).to(args.device)
+        model.load_state_dict(model_config["model_state_dict"])
+        model.eval()
 
-    print("Caption Mode:", cm, "\n")
+        diffusion = Diffusion(img_size=model_config['image_size'], device=args.device, scheduler_type="linear")
+        text_tokenizer = AutoTokenizer.from_pretrained('zzxslp/RadBERT-RoBERTa-4m')
 
-    print("Generating samples...\n")
-    test_diffuser(
-        model, 
-        diffusion, 
-        text_tokenizer, 
-        test_samples_path, 
-        image_size = model_config['image_size'], 
-        k = model_config['k'], 
-        use_clip=model_config['use_clip'], 
-        cm=cm,
-        device = args.device
-    )
+        cm = None
+        if "caption_mode" in model_config.keys():
+            cm = model_config["caption_mode"]
+        else:
+            cm = caption_mode["KEYWORDS"] if model_config['use_keywords'] else caption_mode["CAPTION"]
+            cm = caption_mode["CAPTION_CUI"] if "Cui" in results_path else cm
 
-    print("No of test images: ", len(test_samples_path), "\n")
+        print("Caption Mode:", cm, "\n")
 
-    print("Computing LPIPS...")
-    test_lpips = lpips_evaluation(args, test_samples_path, args.test_images)
-    print(f"Mean LPIPS: {np.mean(test_lpips)}\n")
+        print("Generating samples...\n")
+        test_diffuser(
+            model, 
+            diffusion, 
+            text_tokenizer, 
+            test_samples_path, 
+            image_size = model_config['image_size'], 
+            k = model_config['k'], 
+            use_clip=model_config['use_clip'], 
+            cm=cm,
+            device = args.device,
+            skip_amount = len(os.listdir(test_samples_path))
+        )
 
-    print("Computing FID...\n")
+
     test_fid = fid_evaluation(args, test_samples_path, args.test_images)
     print(f"Mean FID: {np.mean(test_fid)}\n")
 
     with open(os.path.join(results_path, "evaluation_results.txt"), 'w') as f:
-        f.write(f"Mean LPIPS: {np.mean(test_lpips)}\n")
         f.write(f"Mean FID: {np.mean(test_fid)}\n")
     
 if __name__ == '__main__':
-    results = os.listdir("./results")
+    results = sorted(os.listdir("./results"))
     parser = argparse.ArgumentParser()
     parser.add_argument('-device', dest='device', default='cuda')
+
     
     for i, res in enumerate(results):
         if "Net" not in res:

@@ -148,7 +148,7 @@ def train(args):
       with open(os.path.join(res_path, "logs.txt"), 'a') as f:
         f.write(f"Epoch: {epoch+1} -> Average Loss: {total_loss/total_batches}\n\n")
 
-      if int(args.epochs) - (epoch+1) < 5 or (epoch+1) == int(args.epochs)//2:
+      if int(args.epochs) - (epoch+1) < 3:
         torch.save({
             'model_state_dict': ema_model.state_dict(),
             'use_clip': args.use_clip,
@@ -170,7 +170,7 @@ if __name__ == "__main__":
     parser.add_argument('-batch_size',dest='batch_size', default=12, type=int)
     parser.add_argument('-image_size',dest='image_size', default=64, type=int)
     parser.add_argument("-k", dest="k", default=10, type=int)
-    parser.add_argument('-caption_mode',dest='caption_mode', default=2, type=int)
+    parser.add_argument('-caption_mode',dest='caption_mode', default=3, type=int)
     parser.add_argument('-use_clip',dest='use_clip', default=False, type=bool)
     parser.add_argument('-device',dest='device', default='cuda')
     parser.add_argument('-name',dest='name', required=True)
