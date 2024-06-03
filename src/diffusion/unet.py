@@ -335,6 +335,12 @@ class VGG16_Unet(torch.nn.Module):
         if freeze:
             self.freeze_slices()
 
+        print(self.slice1)
+        print()
+        print(self.slice2)
+        print()
+        print(self.slice3)
+
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (
             10000
