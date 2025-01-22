@@ -78,6 +78,7 @@ def train(args):
     model.train()
     total_batches = get_total_batches(args.data_path, phase='train', batch_size=args.batch_size, top_k_cui=args.k)
     for epoch in range(int(args.epochs)):
+      ema_model.train()
       gen = diffusion_data_generator(
         args.data_path, phase="train",
         batch_size=args.batch_size, 
@@ -125,7 +126,7 @@ def train(args):
         )
 
         captions = None
-        model.eval()
+        ema_model.eval()
         for images, captions in test_gen:
           for i, c in enumerate(captions):
             with open(os.path.join(text_path, f"{epoch+1}.txt"), 'a') as f:
@@ -139,7 +140,7 @@ def train(args):
         if args.use_clip:
           captions = clip.tokenize(captions).to(args.device)
         
-        sampled_images = diffusion.sample(model, len(captions), captions)
+        sampled_images = diffusion.sample(ema_model, len(captions), captions)
         save_images(sampled_images, os.path.join(images_path, f"{epoch+1}.jpg"))
 
       print(f"Average Loss: {total_loss/total_batches}")
@@ -161,6 +162,7 @@ def train(args):
 
       if unfreeze and (epoch+1) == int(args.epochs)//2:
         model.unfreeze_slices()
+        ema_model.unfreeze_slices()
       
 if __name__ == "__main__":
     parser=argparse.ArgumentParser()

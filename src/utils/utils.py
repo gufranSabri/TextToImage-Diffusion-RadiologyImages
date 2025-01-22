@@ -4,7 +4,6 @@ import torchvision
 from PIL import Image
 import pandas as pd
 import numpy as np
-from utils.configs import test_amount
 
 import clip
 
@@ -48,7 +47,7 @@ def get_total_batches(data_path, phase='train', batch_size=32, top_k_cui = 20):
 
 def diffusion_data_generator(data_path, phase='train', image_size = 64, batch_size=32, top_k_cui = 20, shuffle=True, cm = caption_mode["CAPTION_CUI_KEYWORDS"]):
     transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(image_size + 32),
+        # torchvision.transforms.Resize(image_size + 32),
         torchvision.transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0), interpolation=Image.BICUBIC),
         torchvision.transforms.Lambda(lambda x: torchvision.transforms.functional.equalize(x)),
         torchvision.transforms.Grayscale(num_output_channels=1),
@@ -62,9 +61,6 @@ def diffusion_data_generator(data_path, phase='train', image_size = 64, batch_si
     
     df = pd.read_csv(os.path.join(data_path, "processed", df_name))
     if shuffle: df = df.sample(frac=1).reset_index(drop=True)
-
-    if phase == "test":
-        df = df.iloc[:test_amount]
     
     remainder = df.shape[0] % batch_size
     if remainder > 0:
@@ -82,7 +78,7 @@ def diffusion_data_generator(data_path, phase='train', image_size = 64, batch_si
             caption = df.iloc[i]['Caption']
             if cm == caption_mode["CAPTION_CUI"]: caption = df.iloc[i]['Caption'] + " " + df.iloc[i]['CUI_caption']
             if cm == caption_mode["KEYWORDS"]: caption = df.iloc[i]['keywords']
-            if cm == caption_mode["CAPTION_CUI_KEYWORDS"]: caption = df.iloc[i]['keywords'] + " " +  df.iloc[i]['Caption']
+            if cm == caption_mode["CAPTION_CUI_KEYWORDS"]: caption = df.iloc[i]['keywords'] + " " +  df.iloc[i]['Caption'] + " " + df.iloc[i]['CUI_caption']
             
             captions.append(caption)
 

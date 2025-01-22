@@ -11,7 +11,7 @@ from PIL import Image
 from torchvision import models
 import warnings
 import pandas as pd
-from utils.configs import test_amount
+# from utils.configs import test_amount
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore")
@@ -68,9 +68,9 @@ def fid_evaluation(args, test_samples_path, real_test_images):
     real_test_images = real_test_images[:len(os.listdir(test_samples_path))]
     fid_res = []
 
-    batch_size = 32 # len(os.listdir(test_samples_path))
+    batch_size = len(os.listdir(test_samples_path))
     # len((os.listdir(test_samples_path))
-    for i in tqdm(range(0, test_amount, batch_size), desc="Computing FID"):
+    for i in tqdm(range(0, len(os.listdir(test_samples_path)), batch_size), desc="Computing FID"):
         real_opened_images = []
         fake_opened_images = []
         
@@ -109,7 +109,7 @@ def main(args):
     models_path = os.path.join(results_path, "model")
     test_samples_path = os.path.join(results_path, "test_samples")
 
-    if not os.path.exists(test_samples_path) or len(os.listdir(test_samples_path)) < test_amount:
+    if not os.path.exists(test_samples_path):
         if not os.path.exists(test_samples_path):
             print("Creating test samples directory...\n")
             os.mkdir(test_samples_path)
